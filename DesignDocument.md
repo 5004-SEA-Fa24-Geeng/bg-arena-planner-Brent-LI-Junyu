@@ -12,14 +12,200 @@ Place your class diagrams below. Make sure you check the file in the browser on 
 
 Provide a class diagram for the provided code as you read through it.  For the classes you are adding, you will create them as a separate diagram, so for now, you can just point towards the interfaces for the provided code diagram.
 
+```mermaid
+classDiagram
+    class BoardGame {
+        -String name
+        -int id
+        -int minPlayers
+        -int maxPlayers
+        -int maxPlayTime
+        -int minPlayTime
+        -double difficulty
+        -int rank
+        -double averageRating
+        -int yearPublished
+        +getName() String
+        +getId() int
+        +getMinPlayers() int
+        +getMaxPlayers() int
+        +getMaxPlayTime() int
+        +getMinPlayTime() int
+        +getDifficulty() double
+        +getRank() int
+        +getRating() double
+        +getYearPublished() int
+        +toStringWithInfo(GameData col) String
+        +toString() String
+        +equals(Object obj) boolean
+        +hashCode() int
+    }
 
+    class ConsoleApp {
+        -Scanner IN
+        -String DEFAULT_FILENAME
+        -Random RND
+        -Scanner current
+        -IGameList gameList
+        -IPlanner planner
+        +ConsoleApp(IGameList gameList, IPlanner planner)
+        +start() void
+        -randomNumber() void
+        -processHelp() void
+        -processFilter() void
+        -printFilterStream(Stream~BoardGame~ games, GameData sortOn) void
+        -processListCommands() void
+        -printCurrentList() void
+        -nextCommand() ConsoleText
+        -remainder() String
+        -getInput(String format, Object... args) String
+        -printOutput(String format, Object... output) void
+    }
+    
+    class GameData {
+        <<enumeration>>
+        NAME
+        ID
+        RATING
+        DIFFICULTY
+        RANK
+        MIN_PLAYERS
+        MAX_PLAYERS
+        MIN_TIME
+        MAX_TIME
+        YEAR
+        -String columnName
+        +getColumnName() String
+        +fromColumnName(String columnName) GameData
+        +fromString(String name) GameData
+    }
+    
+    class Operations {
+        <<enumeration>>
+        EQUALS
+        NOT_EQUALS
+        GREATER_THAN
+        LESS_THAN
+        GREATER_THAN_EQUALS
+        LESS_THAN_EQUALS
+        CONTAINS
+        -String operator
+        +getOperator() String
+        +fromOperator(String operator) Operations
+        +getOperatorFromStr(String str) Operations
+    }
+    
+    class GamesLoader {
+        -String DELIMITER
+        +loadGamesFile(String filename) Set~BoardGame~
+        -toBoardGame(String line, Map~GameData, Integer~ columnMap) BoardGame
+        -processHeader(String header) Map~GameData, Integer~
+    }
+    
+    class BGArenaPlanner {
+        -String DEFAULT_COLLECTION
+        +main(String[] args) void
+    }
+    
+    class IPlanner {
+        <<interface>>
+        +filter(String filter) Stream~BoardGame~
+        +filter(String filter, GameData sortOn) Stream~BoardGame~
+        +filter(String filter, GameData sortOn, boolean ascending) Stream~BoardGame~
+        +reset() void
+    }
+    
+    class IGameList {
+        <<interface>>
+        +String ADD_ALL
+        +getGameNames() List~String~
+        +clear() void
+        +count() int
+        +saveGame(String filename) void
+        +addToList(String str, Stream~BoardGame~ filtered) void
+        +removeFromList(String str) void
+    }
+    
+    class Planner {
+    }
+
+    class GameList {
+    }
+    
+    ConsoleApp --> IGameList
+    ConsoleApp --> IPlanner
+    BGArenaPlanner --> IPlanner
+    BGArenaPlanner --> IGameList
+    BGArenaPlanner --> ConsoleApp
+    Planner ..|> IPlanner
+    GameList ..|> IGameList
+```
 
 ### Your Plans/Design
 
 Create a class diagram for the classes you plan to create. This is your initial design, and it is okay if it changes. Your starting points are the interfaces. 
 
+```mermaid
+classDiagram
+    class Planner {
+        -Set~BoardGame~ games
+        -Set~BoardGame~ filteredGames
+        +Planner(Set~BoardGame~ games)
+        +filter(String filter) Stream~BoardGame~
+        +filter(String filter, GameData sortOn) Stream~BoardGame~
+        +filter(String filter, GameData sortOn, boolean ascending) Stream~BoardGame~
+        +reset() void
+        -filterSingle(String singleFilter, Stream~BoardGame~ currentGames) Stream~BoardGame~
+        -parseFilter(String filter, Stream~BoardGame~ games) Stream~BoardGame~
+        -sortGames(Stream~BoardGame~ games, GameData sortOn, boolean ascending) Stream~BoardGame~
+    }
 
+    class GameList {
+        -Set~BoardGame~ games
+        +GameList()
+        +getGameNames() List~String~
+        +clear() void
+        +count() int
+        +saveGame(String filename) void
+        +addToList(String str, Stream~BoardGame~ filtered) void
+        +removeFromList(String str) void
+        -parseListCommand(String str) List~Integer~
+        -parseRange(String range) List~Integer~
+    }
+    
+    class StringFilter {
+        +apply(BoardGame game, String value, Operations op) boolean
+    }
+    
+    class NumberFilter {
+        +apply(BoardGame game, GameData column, double value, Operations op) boolean
+    }
+    
+    class FilterFactory {
+        +createFilter(GameData column, String value, Operations op) Filter
+    }
+    
+    class Filter {
+        <<interface>>
+        +apply(BoardGame game) boolean
+    }
+    
+    class GameComparator {
+        -GameData sortOn
+        -boolean ascending
+        +GameComparator(GameData sortOn, boolean ascending)
+        +compare(BoardGame game1, BoardGame game2) int
+    }
 
+    Planner ..|> IPlanner
+    GameList ..|> IGameList
+    Planner --> FilterFactory
+    FilterFactory --> Filter
+    StringFilter ..|> Filter
+    NumberFilter ..|> Filter
+    Planner --> GameComparator
+
+```
 
 
 ## (INITIAL DESIGN): Tests to Write - Brainstorm
@@ -34,12 +220,36 @@ Write a test (in english) that you can picture for the class diagram you have cr
 > 4. Refactor/update  as you go along
 > 5. Repeat steps 2-4 until you have all the tests passing/fully built program
 
-You should feel free to number your brainstorm. 
-
-1. Test 1..
-2. Test 2..
-
-
+You should feel free to number your brainstorm.
+1. Test that Planner can be initialized with a set of BoardGames
+2. Test that Planner.reset() returns all the games that were initially provided
+3. Test that Planner.filter() with an empty string returns all games sorted by name
+4. Test that Planner.filter() with "name==GameName" returns only games with that exact name
+5. Test that Planner.filter() with "name~=partial" returns games that contain that substring in their name
+6. Test that Planner.filter() with "minPlayers>3" filters games correctly
+7. Test that Planner.filter() with "maxPlayers<6" filters games correctly
+8. Test that Planner.filter() with "minPlayers>3,maxPlayers<6" filters games correctly (multiple filters)
+9. Test that Planner.filter() with sorting parameter works correctly
+10. Test that Planner.filter() with descending order works correctly
+11. Test that GameList can be initialized
+12. Test that GameList.count() returns 0 when empty
+13. Test that GameList.getGameNames() returns empty list when empty
+14. Test that GameList.addToList() with a specific game name adds that game
+15. Test that GameList.addToList() with a number adds the proper game from the filtered stream
+16. Test that GameList.addToList() with a range "1-3" adds games 1, 2, and 3 from the filtered stream
+17. Test that GameList.addToList() with "all" adds all games from the filtered stream
+18. Test that GameList.removeFromList() with a specific game name removes that game
+19. Test that GameList.removeFromList() with a number removes the proper game
+20. Test that GameList.removeFromList() with a range "1-3" removes games 1, 2, and 3
+21. Test that GameList.removeFromList() with "all" clears the list
+22. Test that GameList.clear() empties the list
+23. Test that GameList.saveGame() writes the correct content to a file
+24. Test that StringFilter correctly applies the EQUALS operator
+25. Test that StringFilter correctly applies the CONTAINS operator
+26. Test that NumberFilter correctly applies all numeric operators (>, <, >=, <=, ==, !=)
+27. Test that FilterFactory creates the correct type of filter based on the column type
+28. Test that GameComparator sorts games correctly by different columns
+29. Test that GameComparator sorts games in ascending and descending order
 
 
 ## (FINAL DESIGN): Class Diagram
