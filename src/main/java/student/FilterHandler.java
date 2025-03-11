@@ -161,8 +161,12 @@ public final class FilterHandler {
      * Class to hold the components of a filter expression.
      */
     public static class FilterComponents {
+
+        /** The column to filter on. */
         private final GameData column;
+        /** The operation to apply. */
         private final Operations operator;
+        /** The value to compare against. */
         private final String value;
 
         /**

@@ -13,14 +13,15 @@ import java.util.stream.Stream;
  * based on different criteria.
  */
 public class Planner implements IPlanner {
-    // Original set of games (unmodified)
+    /** Original set of games (unmodified). */
     private final Set<BoardGame> allGames;
 
-    // Current filtered set of games
+    /** Current filtered set of games. */
     private List<BoardGame> currentFilteredGames;
 
-    // Delimiter for multiple filters
+    /** Delimiter for multiple filters. */
     private static final String FILTER_SEPARATOR = ",";
+
 
     /**
      * Constructor for the Planner.

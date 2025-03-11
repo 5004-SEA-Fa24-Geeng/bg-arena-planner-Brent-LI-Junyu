@@ -4,7 +4,6 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -16,10 +15,10 @@ import java.util.stream.Stream;
  * This class manages a list of games that a user wants to play.
  */
 public class GameList implements IGameList {
-    // Set to store game names (no duplicates)
+    /** Set to store game names (no duplicates). */
     private final Set<String> gameNames;
 
-    // Range separator for adding/removing games by range
+    /** Range separator for adding/removing games by range. */
     private static final String RANGE_SEPARATOR = "-";
 
     /**
