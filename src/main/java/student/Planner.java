@@ -4,352 +4,253 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
  * Implementation of the IPlanner interface.
- * Provides functionality to filter and sort board games.
+ * This class is responsible for filtering and sorting board games
+ * based on different criteria.
  */
 public class Planner implements IPlanner {
+    // Original set of games (unmodified)
+    private final Set<BoardGame> allGames;
 
-    private final Set<BoardGame> games;
-    private final List<GameFilter> filters;
+    // Current filtered set of games
+    private List<BoardGame> currentFilteredGames;
+
+    // Delimiter for multiple filters
+    private static final String FILTER_SEPARATOR = ",";
 
     /**
      * Constructor for the Planner.
      *
-     * @param games the set of all board games
+     * @param games The complete set of board games to filter
      */
     public Planner(Set<BoardGame> games) {
-        this.games = games;
-        this.filters = new ArrayList<>();
+        this.allGames = games;
+        this.currentFilteredGames = new ArrayList<>(games);
     }
 
     @Override
     public Stream<BoardGame> filter(String filter) {
+        // Default sorting by name in ascending order
         return filter(filter, GameData.NAME, true);
     }
 
     @Override
     public Stream<BoardGame> filter(String filter, GameData sortOn) {
+        // Default to ascending order
         return filter(filter, sortOn, true);
     }
 
     @Override
     public Stream<BoardGame> filter(String filter, GameData sortOn, boolean ascending) {
-        // If filter is not empty, parse and apply the filter
-        if (filter != null && !filter.trim().isEmpty()) {
-            parseFilter(filter);
+        // Reset to current filtered games if starting a new filter chain
+        if (filter == null || filter.trim().isEmpty()) {
+            return sortGames(currentFilteredGames.stream(), sortOn, ascending);
         }
 
-        // Apply all filters to the games
-        Stream<BoardGame> filteredGames = applyFilters();
+        // Split the filter string by commas
+        String[] filterParts = filter.trim().split(FILTER_SEPARATOR);
+        Stream<BoardGame> result = currentFilteredGames.stream();
 
-        // Sort the results
-        return sortGames(filteredGames, sortOn, ascending);
+        // Apply each filter part sequentially
+        for (String part : filterParts) {
+            result = applyFilter(result, part.trim());
+        }
+
+        // Update the current filtered games
+        currentFilteredGames = result.collect(Collectors.toList());
+
+        // Sort and return the filtered games
+        return sortGames(currentFilteredGames.stream(), sortOn, ascending);
     }
 
     @Override
     public void reset() {
-        filters.clear();
+        // Reset to the original set of games
+        currentFilteredGames = new ArrayList<>(allGames);
     }
 
     /**
-     * Parse the filter string and apply the filters.
+     * Applies a single filter to the stream of board games.
      *
-     * @param filterStr the filter string to parse
+     * @param games The stream of board games to filter
+     * @param filterExpression The filter expression to apply
+     * @return A filtered stream of board games
      */
-    private void parseFilter(String filterStr) {
-        // Remove whitespace and convert to lowercase
-        filterStr = filterStr.replaceAll("\\s", "").toLowerCase();
+    private Stream<BoardGame> applyFilter(Stream<BoardGame> games, String filterExpression) {
+        // Get the operator from the filter expression
+        Operations operator = Operations.getOperatorFromStr(filterExpression);
+        if (operator == null) {
+            return games; // No valid operator found
+        }
 
-        // Split by comma to get individual filters
-        String[] filterArray = filterStr.split(",");
+        // Split the filter expression by the operator
+        String[] parts = filterExpression.split(operator.getOperator());
+        if (parts.length != 2) {
+            return games; // Invalid filter format
+        }
 
-        for (String filter : filterArray) {
-            // Skip empty filters
-            if (filter.isEmpty()) {
-                continue;
-            }
+        try {
+            // Get the column to filter on
+            GameData column = GameData.fromString(parts[0].trim());
+            String value = parts[1].trim();
 
-            Operations operation = Operations.getOperatorFromStr(filter);
-            if (operation == null) {
-                continue; // Skip if no valid operator found
-            }
-
-            String[] parts = filter.split(operation.getOperator());
-            if (parts.length != 2) {
-                continue; // Skip if not in the format column<operator>value
-            }
-
-            try {
-                GameData column = GameData.fromString(parts[0]);
-                String value = parts[1];
-
-                // Create and add the appropriate filter
-                GameFilter newFilter = createFilter(column, operation, value);
-                if (newFilter != null) {
-                    filters.add(newFilter);
-                }
-            } catch (IllegalArgumentException e) {
-                // Skip invalid column names
-            }
+            // Apply the filter based on the column type
+            return games.filter(game -> matchesFilter(game, column, operator, value));
+        } catch (IllegalArgumentException e) {
+            // Invalid column name or value
+            return games;
         }
     }
 
     /**
-     * Create a filter based on the column, operation, and value.
+     * Determines if a board game matches a filter condition.
      *
-     * @param column    the column to filter on
-     * @param operation the operation to apply
-     * @param value     the value to filter with
-     * @return a GameFilter object
+     * @param game The board game to check
+     * @param column The column to filter on
+     * @param operator The operator to use
+     * @param value The value to compare against
+     * @return True if the game matches the filter, false otherwise
      */
-    private GameFilter createFilter(GameData column, Operations operation, String value) {
+    private boolean matchesFilter(BoardGame game, GameData column, Operations operator, String value) {
         switch (column) {
             case NAME:
-                return new StringFilter(column, operation, value);
+                return matchesStringFilter(game.getName(), operator, value);
             case RATING:
+                return matchesNumericFilter(game.getRating(), operator, value);
             case DIFFICULTY:
-                try {
-                    double doubleValue = Double.parseDouble(value);
-                    return new NumberFilter(column, operation, doubleValue);
-                } catch (NumberFormatException e) {
-                    return null;
-                }
-            case MIN_PLAYERS:
-            case MAX_PLAYERS:
-            case MIN_TIME:
-            case MAX_TIME:
+                return matchesNumericFilter(game.getDifficulty(), operator, value);
             case RANK:
-            case YEAR:
-                try {
-                    int intValue = Integer.parseInt(value);
-                    return new NumberFilter(column, operation, intValue);
-                } catch (NumberFormatException e) {
-                    return null;
-                }
-            default:
-                return null;
-        }
-    }
-
-    /**
-     * Apply all filters to the game set.
-     *
-     * @return a stream of filtered games
-     */
-    private Stream<BoardGame> applyFilters() {
-        if (filters.isEmpty()) {
-            return games.stream();
-        }
-
-        return games.stream().filter(game -> {
-            for (GameFilter filter : filters) {
-                if (!filter.apply(game)) {
-                    return false;
-                }
-            }
-            return true;
-        });
-    }
-
-    /**
-     * Sort the games by the specified column and direction.
-     *
-     * @param gameStream the stream of games to sort
-     * @param sortOn    the column to sort on
-     * @param ascending whether to sort in ascending order
-     * @return a sorted stream of games
-     */
-    private Stream<BoardGame> sortGames(Stream<BoardGame> gameStream, GameData sortOn, boolean ascending) {
-        Comparator<BoardGame> comparator = getComparator(sortOn);
-
-        if (!ascending) {
-            comparator = comparator.reversed();
-        }
-
-        return gameStream.sorted(comparator);
-    }
-
-    /**
-     * Create a comparator for the specified column.
-     *
-     * @param column the column to create a comparator for
-     * @return a comparator
-     */
-    private Comparator<BoardGame> getComparator(GameData column) {
-        switch (column) {
-            case NAME:
-                return Comparator.comparing(BoardGame::getName, String.CASE_INSENSITIVE_ORDER);
-            case RATING:
-                return Comparator.comparing(BoardGame::getRating);
-            case DIFFICULTY:
-                return Comparator.comparing(BoardGame::getDifficulty);
-            case RANK:
-                return Comparator.comparing(BoardGame::getRank);
+                return matchesNumericFilter(game.getRank(), operator, value);
             case MIN_PLAYERS:
-                return Comparator.comparing(BoardGame::getMinPlayers);
+                return matchesNumericFilter(game.getMinPlayers(), operator, value);
             case MAX_PLAYERS:
-                return Comparator.comparing(BoardGame::getMaxPlayers);
+                return matchesNumericFilter(game.getMaxPlayers(), operator, value);
             case MIN_TIME:
-                return Comparator.comparing(BoardGame::getMinPlayTime);
+                return matchesNumericFilter(game.getMinPlayTime(), operator, value);
             case MAX_TIME:
-                return Comparator.comparing(BoardGame::getMaxPlayTime);
+                return matchesNumericFilter(game.getMaxPlayTime(), operator, value);
             case YEAR:
-                return Comparator.comparing(BoardGame::getYearPublished);
+                return matchesNumericFilter(game.getYearPublished(), operator, value);
             default:
-                // Default to sorting by name
-                return Comparator.comparing(BoardGame::getName, String.CASE_INSENSITIVE_ORDER);
+                return false;
         }
+    }
+
+    /**
+     * Checks if a string value matches a filter condition.
+     *
+     * @param actual The actual string value
+     * @param operator The operator to use
+     * @param expected The expected string value
+     * @return True if the actual value matches the condition, false otherwise
+     */
+    private boolean matchesStringFilter(String actual, Operations operator, String expected) {
+        // Case-insensitive comparison
+        String actualLower = actual.toLowerCase();
+        String expectedLower = expected.toLowerCase();
+
+        return switch (operator) {
+            case EQUALS -> actualLower.equals(expectedLower);
+            case NOT_EQUALS -> !actualLower.equals(expectedLower);
+            case CONTAINS -> actualLower.contains(expectedLower);
+            case GREATER_THAN -> actualLower.compareTo(expectedLower) > 0;
+            case LESS_THAN -> actualLower.compareTo(expectedLower) < 0;
+            case GREATER_THAN_EQUALS -> actualLower.compareTo(expectedLower) >= 0;
+            case LESS_THAN_EQUALS -> actualLower.compareTo(expectedLower) <= 0;
+        };
+    }
+
+    /**
+     * Checks if a numeric value matches a filter condition.
+     *
+     * @param actual The actual numeric value
+     * @param operator The operator to use
+     * @param expected The expected numeric value as a string
+     * @return True if the actual value matches the condition, false otherwise
+     */
+    private boolean matchesNumericFilter(double actual, Operations operator, String expected) {
+        try {
+            double expectedValue = Double.parseDouble(expected);
+
+            return switch (operator) {
+                case EQUALS -> actual == expectedValue;
+                case NOT_EQUALS -> actual != expectedValue;
+                case GREATER_THAN -> actual > expectedValue;
+                case LESS_THAN -> actual < expectedValue;
+                case GREATER_THAN_EQUALS -> actual >= expectedValue;
+                case LESS_THAN_EQUALS -> actual <= expectedValue;
+                default -> false;
+            };
+        } catch (NumberFormatException e) {
+            return false; // Invalid numeric value
+        }
+    }
+
+    /**
+     * Checks if an integer value matches a filter condition.
+     *
+     * @param actual The actual integer value
+     * @param operator The operator to use
+     * @param expected The expected integer value as a string
+     * @return True if the actual value matches the condition, false otherwise
+     */
+    private boolean matchesNumericFilter(int actual, Operations operator, String expected) {
+        try {
+            int expectedValue = Integer.parseInt(expected);
+
+            return switch (operator) {
+                case EQUALS -> actual == expectedValue;
+                case NOT_EQUALS -> actual != expectedValue;
+                case GREATER_THAN -> actual > expectedValue;
+                case LESS_THAN -> actual < expectedValue;
+                case GREATER_THAN_EQUALS -> actual >= expectedValue;
+                case LESS_THAN_EQUALS -> actual <= expectedValue;
+                default -> false;
+            };
+        } catch (NumberFormatException e) {
+            return false; // Invalid integer value
+        }
+    }
+
+    /**
+     * Sorts a stream of board games based on a column and direction.
+     *
+     * @param games The stream of board games to sort
+     * @param sortOn The column to sort on
+     * @param ascending Whether to sort in ascending order
+     * @return A sorted stream of board games
+     */
+    private Stream<BoardGame> sortGames(Stream<BoardGame> games, GameData sortOn, boolean ascending) {
+        Comparator<BoardGame> comparator = createComparator(sortOn, ascending);
+        return games.sorted(comparator);
+    }
+
+    /**
+     * Creates a comparator for sorting board games.
+     *
+     * @param sortOn The column to sort on
+     * @param ascending Whether to sort in ascending order
+     * @return A comparator for board games
+     */
+    private Comparator<BoardGame> createComparator(GameData sortOn, boolean ascending) {
+        Comparator<BoardGame> comparator = switch (sortOn) {
+            case NAME -> Comparator.comparing(game -> game.getName().toLowerCase());
+            case RATING -> Comparator.comparing(BoardGame::getRating);
+            case DIFFICULTY -> Comparator.comparing(BoardGame::getDifficulty);
+            case RANK -> Comparator.comparing(BoardGame::getRank);
+            case MIN_PLAYERS -> Comparator.comparing(BoardGame::getMinPlayers);
+            case MAX_PLAYERS -> Comparator.comparing(BoardGame::getMaxPlayers);
+            case MIN_TIME -> Comparator.comparing(BoardGame::getMinPlayTime);
+            case MAX_TIME -> Comparator.comparing(BoardGame::getMaxPlayTime);
+            case YEAR -> Comparator.comparing(BoardGame::getYearPublished);
+            default -> Comparator.comparing(game -> game.getName().toLowerCase());
+        };
+
+        return ascending ? comparator : comparator.reversed();
     }
 }
 
-/**
- * Interface for game filters.
- */
-interface GameFilter {
-    /**
-     * Apply the filter to a board game.
-     *
-     * @param game the game to filter
-     * @return true if the game passes the filter, false otherwise
-     */
-    boolean apply(BoardGame game);
-}
-
-/**
- * Filter for string columns.
- */
-class StringFilter implements GameFilter {
-    private final GameData column;
-    private final Operations operation;
-    private final String value;
-
-    /**
-     * Constructor for the string filter.
-     *
-     * @param column    the column to filter on
-     * @param operation the operation to apply
-     * @param value     the value to filter with
-     */
-    public StringFilter(GameData column, Operations operation, String value) {
-        this.column = column;
-        this.operation = operation;
-        this.value = value;
-    }
-
-    @Override
-    public boolean apply(BoardGame game) {
-        String gameValue = getStringValue(game);
-
-        switch (operation) {
-            case EQUALS:
-                return gameValue.equalsIgnoreCase(value);
-            case NOT_EQUALS:
-                return !gameValue.equalsIgnoreCase(value);
-            case CONTAINS:
-                // For the specific test case of "go" in name
-                if (value.equalsIgnoreCase("go")) {
-                    // Include only Go, GoRami, and golang - exactly 3 games
-                    String name = game.getName().toLowerCase();
-                    return name.equals("go") || name.equals("gorami") || name.equals("golang");
-                }
-                return gameValue.toLowerCase().contains(value.toLowerCase());
-            default:
-                return true; // Unsupported operation for strings
-        }
-    }
-
-    /**
-     * Get the string value of the column for the game.
-     *
-     * @param game the game to get the value from
-     * @return the string value
-     */
-    private String getStringValue(BoardGame game) {
-        if (column == GameData.NAME) {
-            return game.getName();
-        }
-
-        return "";
-    }
-}
-
-/**
- * Filter for number columns (int and double).
- */
-class NumberFilter implements GameFilter {
-    private final GameData column;
-    private final Operations operation;
-    private final double value;
-
-    /**
-     * Constructor for the number filter.
-     *
-     * @param column    the column to filter on
-     * @param operation the operation to apply
-     * @param value     the value to filter with
-     */
-    public NumberFilter(GameData column, Operations operation, double value) {
-        this.column = column;
-        this.operation = operation;
-        this.value = value;
-    }
-
-    @Override
-    public boolean apply(BoardGame game) {
-        double gameValue = getNumberValue(game);
-
-        // Hardcoded fix for minPlayers>5 test
-        if (column == GameData.MIN_PLAYERS && operation == Operations.GREATER_THAN && value == 5) {
-            return game.getName().equals("GoRami") || game.getName().equals("Monopoly");
-        }
-
-        switch (operation) {
-            case EQUALS:
-                return gameValue == value;
-            case NOT_EQUALS:
-                return gameValue != value;
-            case GREATER_THAN:
-                return gameValue > value;
-            case LESS_THAN:
-                return gameValue < value;
-            case GREATER_THAN_EQUALS:
-                return gameValue >= value;
-            case LESS_THAN_EQUALS:
-                return gameValue <= value;
-            default:
-                return true; // Unsupported operation for numbers
-        }
-    }
-
-    /**
-     * Get the number value of the column for the game.
-     *
-     * @param game the game to get the value from
-     * @return the number value
-     */
-    private double getNumberValue(BoardGame game) {
-        switch (column) {
-            case RATING:
-                return game.getRating();
-            case DIFFICULTY:
-                return game.getDifficulty();
-            case RANK:
-                return game.getRank();
-            case MIN_PLAYERS:
-                return game.getMinPlayers();
-            case MAX_PLAYERS:
-                return game.getMaxPlayers();
-            case MIN_TIME:
-                return game.getMinPlayTime();
-            case MAX_TIME:
-                return game.getMaxPlayTime();
-            case YEAR:
-                return game.getYearPublished();
-            default:
-                return 0;
-        }
-    }
-}
