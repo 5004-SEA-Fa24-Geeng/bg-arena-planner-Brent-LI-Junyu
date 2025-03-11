@@ -267,7 +267,208 @@ For the final design, you just need to do a single diagram that includes both th
 
 ## (FINAL DESIGN): Reflection/Retrospective
 
+```mermaid
+classDiagram
+    class BoardGame {
+        -String name
+        -int id
+        -int minPlayers
+        -int maxPlayers
+        -int maxPlayTime
+        -int minPlayTime
+        -double difficulty
+        -int rank
+        -double averageRating
+        -int yearPublished
+        +getName() String
+        +getId() int
+        +getMinPlayers() int
+        +getMaxPlayers() int
+        +getMaxPlayTime() int
+        +getMinPlayTime() int
+        +getDifficulty() double
+        +getRank() int
+        +getRating() double
+        +getYearPublished() int
+        +toStringWithInfo(GameData) String
+        +equals(Object) boolean
+        +hashCode() int
+    }
+
+    class IPlanner {
+        <<interface>>
+        +filter(String) Stream~BoardGame~
+        +filter(String, GameData) Stream~BoardGame~
+        +filter(String, GameData, boolean) Stream~BoardGame~
+        +reset() void
+    }
+
+    class Planner {
+        -Set~BoardGame~ allGames
+        -List~BoardGame~ currentFilteredGames
+        -static String FILTER_SEPARATOR
+        +Planner(Set~BoardGame~)
+        +filter(String) Stream~BoardGame~
+        +filter(String, GameData) Stream~BoardGame~
+        +filter(String, GameData, boolean) Stream~BoardGame~
+        +reset() void
+        -applyFilter(Stream~BoardGame~, String) Stream~BoardGame~
+        -matchesFilter(BoardGame, GameData, Operations, String) boolean
+        -matchesStringFilter(String, Operations, String) boolean
+        -matchesNumericFilter(double, Operations, String) boolean
+        -matchesNumericFilter(int, Operations, String) boolean
+        -sortGames(Stream~BoardGame~, GameData, boolean) Stream~BoardGame~
+        -createComparator(GameData, boolean) Comparator~BoardGame~
+    }
+
+    class IGameList {
+        <<interface>>
+        +static String ADD_ALL
+        +getGameNames() List~String~
+        +clear() void
+        +count() int
+        +saveGame(String) void
+        +addToList(String, Stream~BoardGame~) void
+        +removeFromList(String) void
+    }
+
+    class GameList {
+        -Set~String~ gameNames
+        -static String RANGE_SEPARATOR
+        +GameList()
+        +getGameNames() List~String~
+        +clear() void
+        +count() int
+        +saveGame(String) void
+        +addToList(String, Stream~BoardGame~) void
+        +removeFromList(String) void
+        -addByRange(String, List~BoardGame~) void
+        -addByIndex(int, List~BoardGame~) void
+        -removeByRange(String, List~String~) void
+        -removeByIndex(int, List~String~) void
+    }
+
+    class GameData {
+        <<enumeration>>
+        NAME
+        ID
+        RATING
+        DIFFICULTY
+        RANK
+        MIN_PLAYERS
+        MAX_PLAYERS
+        MIN_TIME
+        MAX_TIME
+        YEAR
+        -String columnName
+        +getColumnName() String
+        +static fromColumnName(String) GameData
+        +static fromString(String) GameData
+    }
+
+    class Operations {
+        <<enumeration>>
+        EQUALS
+        NOT_EQUALS
+        GREATER_THAN
+        LESS_THAN
+        GREATER_THAN_EQUALS
+        LESS_THAN_EQUALS
+        CONTAINS
+        -String operator
+        +getOperator() String
+        +static fromOperator(String) Operations
+        +static getOperatorFromStr(String) Operations
+    }
+
+    class FilterHandler {
+        <<utility>>
+        -FilterHandler() 
+        +static createFilter(GameData, Operations, String) Predicate~BoardGame~
+        -static createStringFilter(Function, Operations, String) Predicate~BoardGame~
+        -static createIntFilter(ToIntFunction, Operations, String) Predicate~BoardGame~
+        -static createDoubleFilter(ToDoubleFunction, Operations, String) Predicate~BoardGame~
+        +static parseFilterExpression(String) FilterComponents
+    }
+
+    class FilterHandler {
+        -GameData column
+        -Operations operator
+        -String value
+        +FilterComponents(GameData, Operations, String)
+        +getColumn() GameData
+        +getOperator() Operations
+        +getValue() String
+    }
+
+    class SortComparator {
+        <<utility>>
+        -SortComparator()
+        +static createComparator(GameData, boolean) Comparator~BoardGame~
+        -static getColumnComparator(GameData) Comparator~BoardGame~
+        +static nameComparator() Comparator~String~
+    }
+
+    class GamesLoader {
+        <<utility>>
+        -static String DELIMITER
+        -GamesLoader()
+        +static loadGamesFile(String) Set~BoardGame~
+        -static toBoardGame(String, Map) BoardGame
+        -static processHeader(String) Map
+    }
+
+    class ConsoleApp {
+        -static Scanner IN
+        -static String DEFAULT_FILENAME
+        -static Random RND
+        -Scanner current
+        -IGameList gameList
+        -IPlanner planner
+        +ConsoleApp(IGameList, IPlanner)
+        +start() void
+        -randomNumber() void
+        -processHelp() void
+        -processFilter() void
+        -static printFilterStream(Stream~BoardGame~, GameData) void
+        -processListCommands() void
+        -printCurrentList() void
+        -nextCommand() ConsoleText
+        -remainder() String
+        -static getInput(String, Object...) String
+        -static printOutput(String, Object...) void
+    }
+
+    class BGArenaPlanner {
+        <<main>>
+        -static String DEFAULT_COLLECTION
+        -BGArenaPlanner()
+        +static main(String[]) void
+    }
+
+    IPlanner <|.. Planner
+    IGameList <|.. GameList
+    Planner --> BoardGame
+    Planner --> GameData
+    Planner --> Operations
+    Planner ..> SortComparator : uses
+    GameList --> BoardGame
+    FilterHandler --> GameData
+    FilterHandler --> Operations
+    FilterHandler +-- FilterHandler.FilterComponents
+    GamesLoader --> BoardGame
+    GamesLoader --> GameData
+    ConsoleApp --> IGameList
+    ConsoleApp --> IPlanner
+    BGArenaPlanner ..> GamesLoader : uses
+    BGArenaPlanner ..> IPlanner : creates
+    BGArenaPlanner ..> IGameList : creates
+    BGArenaPlanner ..> ConsoleApp : creates
+```
+
 > [!IMPORTANT]
 > The value of reflective writing has been highly researched and documented within computer science, from learning to information to showing higher salaries in the workplace. For this next part, we encourage you to take time, and truly focus on your retrospective.
 
-Take time to reflect on how your design has changed. Write in *prose* (i.e. do not bullet point your answers - it matters in how our brain processes the information). Make sure to include what were some major changes, and why you made them. What did you learn from this process? What would you do differently next time? What was the most challenging part of this process? For most students, it will be a paragraph or two. 
+Take time to reflect on how your design has changed. Write in *prose* (i.e. do not bullet point your answers - it matters in how our brain processes the information). Make sure to include what were some major changes, and why you made them. What did you learn from this process? What would you do differently next time? What was the most challenging part of this process? For most students, it will be a paragraph or two.
+
+Initially, I planned for multiple filter classes with a factory pattern, but I found this approach too complex. Instead, I used utility classes with static methods that handle filtering and sorting more simply. The hardest part was parsing filter strings correctly, especially with multiple conditions. I learned that Java streams are powerful for filtering, though they have a learning curve. Next time, I'd spend more time planning the string parsing before coding to avoid extensive refactoring later.
